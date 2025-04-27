@@ -7,9 +7,6 @@
 
 `OpenPCSeg` is an open-source point cloud segmentation toolbox based on [PyTorch](https://pytorch.org/), heading towards the unification and thriving of 3D scene understanding and its related areas. With the help of `OpenPCSeg`, we benchmark methods in a way that pursues fairness, efficiency, and effectiveness, on prevailing large-scale point cloud datasets. At this moment, `OpenPCSeg` focuses on outdoor point cloud segmentation for autonomous driving.
 
-**This project is developed and maintained by Autonomous Driving Group [at] [Shanghai AI Laboratory](https://www.shlab.org.cn/) (ADLab).**
-
-
 | <img src="./docs/figs/demo-bev-1.gif" align="middle"> | <img src="./docs/figs/demo-bev-2.gif" align="middle"> | <img src="./docs/figs/demo-bev-3.gif" align="middle"> |
 | :-: | :-: | :-: |
 | <img src="./docs/figs/demo-rv-1.gif" align="middle"> | <img src="./docs/figs/demo-rv-2.gif" align="middle"> | <img src="./docs/figs/demo-rv-3.gif" align="middle"> |
