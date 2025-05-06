@@ -36,7 +36,7 @@ def fast_hist(pred, label, n):
     k = (label >= 0) & (label < n)
     bin_count = np.bincount(
         n * label[k].astype(int) + pred[k], minlength=n ** 2)
-    
+
     return bin_count[:n ** 2].reshape(n, n)
 
 
@@ -56,7 +56,8 @@ def parse_config():
     parser = argparse.ArgumentParser(description='OpenPCSeg training script version 0.1')
 
     # == general configs ==
-    parser.add_argument('--cfg_file', type=str, default='tools/cfgs/voxel/minkunet_mk18_cr10.yaml',
+    #parser.add_argument('--cfg_file', type=str, default='tools/cfgs/voxel/minkunet_mk18_cr10.yaml',
+    parser.add_argument('--cfg_file', type=str, default='tools/cfgs/voxel/semantic_kitti/minkunet_mk34_cr16_infer.yaml',
                         help='specify the config for training')
     parser.add_argument('--extra_tag', type=str, default='default',
                         help='extra tag for this experiment.')
@@ -84,13 +85,13 @@ def parse_config():
     parser.add_argument('--merge_all_iters_to_one_epoch', action='store_true', default=False,
                         help='')
     # == evaluation configs ==
-    parser.add_argument('--eval', action='store_true', default=True,
+    parser.add_argument('--eval', action='store_true', default=False,   # Old: default=True
                         help='only perform evaluate')
     parser.add_argument('--eval_interval', type=int, default=50,
                         help='number of training epochs')
     # == device configs ==
-    parser.add_argument('--workers', type=int, default=5,  
-                        help='number of workers for dataloader') 
+    parser.add_argument('--workers', type=int, default=5,
+                        help='number of workers for dataloader')
     parser.add_argument('--local_rank', type=int, default=0,
                         help='local rank for distributed training')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm'], default='none',
@@ -122,7 +123,7 @@ class Trainer:
         # set save path
         self.log_dir = log_dir
         self.ckp_dir = ckp_dir
-        
+
         # set logger
         self.logger = logger
         self.logger_tb = logger_tb
@@ -137,7 +138,7 @@ class Trainer:
         self.if_dist_train = if_dist_train
         self.eval_interval = args.eval_interval
         self.ckp_save_interval = args.ckp_save_interval
-    
+
         # set dataloader
         dataset, loader, sampler = build_dataloader(
             data_cfgs=cfgs.DATA,
@@ -161,7 +162,7 @@ class Trainer:
             num_class = 20
         elif cfgs.DATA.DATASET == 'waymo':
             num_class = 23
-        
+
         # set model
         model = build_network(
             model_cfgs=cfgs.MODEL,
@@ -218,7 +219,7 @@ class Trainer:
                 device_ids=[cfgs.LOCAL_RANK % torch.cuda.device_count()],
             )
         self.model.train()
-        
+
         logger.info(self.model)
         logger.info("Model parameters: {:.3f} M".format(get_n_params(self.model)/1e6))
 
@@ -230,7 +231,7 @@ class Trainer:
             self.unique_label = np.array(list(range(22)))  # 0 is ignore
         else:
             raise NotImplementedError
-    
+
     @staticmethod
     def init(args, cfgs):
         if args.launcher == 'none':
@@ -270,10 +271,10 @@ class Trainer:
         if if_dist_train:
             logger.info('total_batch_size: %d' % (total_gpus * cfgs.OPTIM.BATCH_SIZE_PER_GPU))
             logger.info('total_lr: %f' % cfgs.OPTIM.LR)
-        
+
         for key, val in vars(args).items():
             logger.info('{:16} {}'.format(key, val))
-        
+
         log_config_to_file(cfgs, logger=logger)
         if cfgs.LOCAL_RANK == 0:
             os.system('cp %s %s' % (args.cfg_file, log_dir))
@@ -317,7 +318,7 @@ class Trainer:
             self.scheduler.load_state_dict(checkpoint['scheduler_state'])
         except Exception as e:
             print('Ignore error:', e)
-        
+
         self.logger.info('==> Done')
         return
 
@@ -340,7 +341,7 @@ class Trainer:
             data_time = common_utils.AverageMeter()
             batch_time = common_utils.AverageMeter()
             forward_time = common_utils.AverageMeter()
-        
+
         for cur_it in range(total_it_each_epoch):
 
             end = time.time()
@@ -364,7 +365,7 @@ class Trainer:
             with amp.autocast(enabled=self.if_amp):
                 ret_dict, tb_dict, disp_dict = self.model(batch)
                 loss = ret_dict['loss'].mean()
-            
+
             forward_timer = time.time()
             cur_forward_time = forward_timer - data_timer
 
@@ -388,7 +389,7 @@ class Trainer:
                 batch_time.update(avg_batch_time)
                 disp_dict.update({
                     'loss': loss.item(),
-                    'lr': cur_lr, 
+                    'lr': cur_lr,
                     'd_time': f'{data_time.val:.2f}({data_time.avg:.2f})',
                     'f_time': f'{forward_time.val:.2f}({forward_time.avg:.2f})',
                     'b_time': f'{batch_time.val:.2f}({batch_time.avg:.2f})',
@@ -405,7 +406,7 @@ class Trainer:
                         self.logger_tb.add_scalar('train/' + key, val, self.it)
 
         if 'Range' not in data_cfg.DATASET:
-            self.loader.dataset.point_cloud_dataset.resample()  
+            self.loader.dataset.point_cloud_dataset.resample()
         if self.rank == 0:
             pbar.close()
 
@@ -422,17 +423,17 @@ class Trainer:
         metric = {}
         metric['hist_list'] = []
         save_dir = self.cfgs.DATA.OUTPUT_DIR
-        os.makedirs(save_dir, exist_ok=True) 
+        os.makedirs(save_dir, exist_ok=True)
 
         for i, batch_dict in enumerate(dataloader):
             load_data_to_gpu(batch_dict)
 
             with torch.no_grad():
                 ret_dict = self.model(batch_dict)
-            
+
             point_predict = ret_dict['point_predict']
             point_labels = ret_dict['point_labels']
-            
+
             save_name = (10-len(str(i))) * '0' + str(i)
             save_path = save_dir + save_name + '.npy'
             np.save(save_path, ret_dict['point_predict'][0])
@@ -445,10 +446,10 @@ class Trainer:
 
             for pred, label in zip(point_predict, point_labels):
                 metric['hist_list'].append(fast_hist_crop(pred, label, self.unique_label))
-            
+
             if self.rank == 0:
                 progress_bar.update()
-        
+
         if self.rank == 0:
             progress_bar.close()
 
@@ -467,7 +468,7 @@ class Trainer:
                 trained_epoch = cur_epoch + 1
                 if trained_epoch % self.ckp_save_interval == 0 and self.rank == 0:
                     self.save_checkpoint()
-                
+
                 if (cur_epoch+1) % self.eval_interval == 0 or cur_epoch == self.total_epoch-1:
                     self.model.eval()
                     data_config = copy.deepcopy(self.cfgs.DATA)
@@ -483,9 +484,9 @@ class Trainer:
                     self.evaluate(test_loader, "val")
                     if self.if_dist_train:
                         torch.distributed.barrier()
-                    
+
                     time.sleep(1)
-            
+
             if len(tbar) == 0:
                 self.model.eval()
                 data_config = copy.deepcopy(self.cfgs.DATA)
@@ -501,9 +502,9 @@ class Trainer:
 
                 if self.if_dist_train:
                     torch.distributed.barrier()
-                
+
                 time.sleep(1)
-            
+
 
 def main():
     args, cfgs = parse_config()
